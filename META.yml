@@ -1,0 +1,36 @@
+---
+name: Spark-Form
+version: 0.01
+author:
+  - 'James Laver <sprintf qw(%s@%s.%s cpan jameslaver com)>'
+abstract: A simple yet powerful forms validation system that promotes reuse.
+license: perl
+resources:
+  license: http://dev.perl.org/licenses/
+requires:
+  Any::Moose: 0
+  Module::Pluggable: 0
+build_requires:
+  Test::More: 0
+provides:
+  Spark::Form:
+    file: lib/Spark/Form.pm
+    version: 0.01
+  Spark::Form::Field:
+    file: lib/Spark/Form/Field.pm
+  Spark::Form::Field::Mandatory:
+    file: lib/Spark/Form/Field/Mandatory.pm
+  Spark::Form::Field::Role::Confirm:
+    file: lib/Spark/Form/Field/Role/Confirm.pm
+  Spark::Form::Field::Role::MaxLength:
+    file: lib/Spark/Form/Field/Role/MaxLength.pm
+  Spark::Form::Field::Role::MinLength:
+    file: lib/Spark/Form/Field/Role/MinLength.pm
+  Spark::Form::Field::Role::NotEmpty:
+    file: lib/Spark/Form/Field/Role/NotEmpty.pm
+  Spark::Form::Field::Role::Regex:
+    file: lib/Spark/Form/Field/Role/Regex.pm
+generated_by: Module::Build version 0.33
+meta-spec:
+  url: http://module-build.sourceforge.net/META-spec-v1.4.html
+  version: 1.4
