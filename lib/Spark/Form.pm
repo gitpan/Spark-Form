@@ -1,21 +1,36 @@
 package Spark::Form;
 
-our $VERSION = 0.01;
+our $VERSION = 0.1;
 
-use Any::Moose;
+use Moose;
+use MooseX::AttributeHelpers;
+use List::MoreUtils 'all';
 
-has fields_a => (
-    isa      => 'ArrayRef',
-    is       => 'rw',
-    required => 0,
-    default  => sub {[]},
+has _fields_a => (
+    metaclass => 'Collection::Array',
+    isa       => 'ArrayRef',
+    is        => 'rw',
+    required  => 0,
+    default   => sub {[]},
+    provides  => {
+        push     => '_add_fields_a',
+        elements => 'fields_a',
+        clear    => '_clear_fields_a',
+    },
 );
 
-has fields_h => (
-    isa      => 'HashRef',
-    is       => 'rw',
-    required => 0,
-    default  => sub {+{}},
+has _fields_h => (
+    metaclass => 'Collection::Hash',
+    isa       => 'HashRef',
+    is        => 'rw',
+    required  => 0,
+    default   => sub {+{}},
+    provides  => {
+        set     => '_set_fields_h',
+        get     => '_get_fields_h',
+        delete  => '_delete_fields_h',
+        exists  => '_has_fields_h',
+    },
 );
 
 has plugin_ns => (
@@ -24,12 +39,17 @@ has plugin_ns => (
     required => 0,
 );
 
-has errors   => (
-    isa      => 'ArrayRef',
-    is       => 'rw',
-    required => 0,
-    default  => sub {[]},
-);
+has _errors   => (
+    metaclass => 'Collection::Array',
+    isa       => 'ArrayRef',
+    is        => 'ro',
+    required  => 0,
+    default   => sub {[]},
+    provides  => {
+        push     => '_add_error',
+        elements => 'errors',
+        clear    => '_clear_errors',
+    },);
 
 has valid    => (
     isa      => 'Bool',
@@ -38,18 +58,23 @@ has valid    => (
     default  => 0,
 );
 
+has '_printer'  => (
+    isa      => 'Maybe[Str]',
+    required => 0,
+    is       => 'ro',
+    init_arg => 'printer',
+);
+
 sub BUILD {
     my ($self) = @_;
     my @search_path = (
-        #This will load Email and Password etc.
+        #This will load anything from SparkX::Form::Field
         'SparkX::Form::Field',
-        #This will load Mandatory, Optional and any specific type plugins
-        'Spark::Form::Field'
     );
     if ($self->plugin_ns) {
         unshift @search_path, ($self->plugin_ns);
     }
-    
+
     eval q{
         use Module::Pluggable (
             search_path => \@search_path,
@@ -58,20 +83,35 @@ sub BUILD {
         );
         1
     } or die("Spark::Form: Could not instantiate Module::Pluggable, $@");
+
+    if (defined $self->_printer) {
+        eval {
+            $self->_printer->meta->apply($self); 1
+        } or die("Could not apply printer " . $self->printer);
+    }
+}
+
+sub _error {
+    my ($self,$error) = @_;
+
+    $self->valid(0);
+    $self->_add_error($error);
 }
 
 sub add {
-    my ($self,$item,$name,%opts) = @_;
+    my $self = shift;
+    my $item = shift;
+    
     #Dispatch to the appropriate handler sub
 
-    #1. Regular String
-    return do { $self->_add_by_type($item,$name,%opts); $self }
+    #1. Regular String. Should have a name and any optional args
+    return do { die unless scalar @_; $self->_add_by_type($item,@_); $self }
       unless ref $item;
-    #2. Array - loop.
-    return do { $self->add($_,$name,%opts) for @$item; $self }
+    #2. Array - loop. This will spectacularly fall over if you are using string-based creation as there's no way to pass multiple names yet
+    return do { $self->add($_,@_) for @$item; $self }
       if ref $item eq 'ARRAY';
-    #3. Custom field
-    return do { $self->_add_custom_field($item,%opts); $self }
+    #3. Custom field. Just takes any optional args
+    return do { $self->_add_custom_field($item,@_); $self }
       if $self->_valid_custom_field($item);
 
     #Unknown thing
@@ -80,31 +120,33 @@ sub add {
 
 sub get {
     my ($self, $key) = @_;
-    confess unless $key;
-    $self->fields_h->{$key};
+
+    $self->_get_fields_h($key);
 }
 
 sub validate {
     my ($self) = @_;
-
-    my @errors;
-    foreach my $field (@{$self->fields_a}) {
-        $field->validate;
-        unless ($field->valid) {
-            push @errors, @{$field->errors};
+    #Clear out
+    $self->valid(1);
+    $self->_clear_errors();
+    if (all { $_->meta->does_role('Spark::Form::Field::Role::Validateable') } $self->fields_a) {
+        foreach my $field ($self->fields_a) {
+            $field->validate;
+            unless ($field->valid) {
+                $self->_error($_) foreach $field->errors;
+            }
         }
+        $self->valid;
+    } else {
+        die ("Not all fields in this form are validateable.");
     }
-    $self->errors(\@errors);
-    $self->valid(!@errors);
-    
-    $self->valid;
 }
 
 sub data {
     my ($self,$fields) = @_;
     while (my ($k,$v) = each %$fields) {
-        if (defined $self->fields_h->{$k}) {
-            $self->fields_h->{$k}->value($v);
+        if ($self->_has_fields_h($k)) {
+            $self->_get_fields_h($k)->value($v);
         }
     }
 
@@ -114,10 +156,7 @@ sub data {
 sub _valid_custom_field {
     my ($self,$thing) = @_;
     eval {
-        #Minimum spec for a field:
-        #  implements:
-        #    - Spark::Form::Field
-        $thing->meta->does_role('Spark::Form::Field')
+        $thing->isa('Spark::Form::Field')
     } or 0;
 }
 
@@ -130,35 +169,44 @@ sub _add_custom_field {
 
 sub _add_by_type {
     my ($self,$type,$name,%opts) = @_;
+
     #Default name is type itself
     $name ||= $type;
+
     #Create and add it
     $self->_add($self->_create_type($type,$name,%opts),$name);
 }
 
 sub _add {
     my ($self,$field,$name) = @_;
-    
-    die("Field name $name exists in form.") if defined $self->fields_h->{$name};
+
+    #
+    die("Field name $name exists in form.") if $self->_has_fields_h($name);
+
     #Add it onto the arrayref
-    push @{$self->fields_a}, $field;
+    $self->_add_fields_a($field);
+
     #And the hashref
-    $self->fields_h->{$name} = $field;
+    $self->_set_fields_h($name, $field);
     1;
 }
 
 sub _mangle_modname {
     my ($self, $mod) = @_;
+
     #Strip one or the other. This is the cleanest way.
     #It also doesn't matter that class may be null
     my @namespaces = (
         "SparkX::Form::Field",
         "Spark::Form::Field",
     );
+
     push @namespaces,$self->plugin_ns if $self->plugin_ns;
+
     foreach my $ns (@namespaces) {
         last if $mod =~ s/^${ns}:://;
     }
+
     #Regulate.
     $mod =~ s/::/-/g;
     $mod = lc $mod;
@@ -173,12 +221,7 @@ sub _find_matching_mod {
     foreach my $mod ($self->field_mods) {
         return $mod if $self->_mangle_modname($mod) eq $wanted;
     }
-    
-    if ($self->plugin_ns) {
-        use Data::Dumper 'Dumper';
-        die Dumper $self->_mangle_modname('TestApp::Form::Field::Custom');
-        die Dumper $self->field_mods;
-    }
+
     #Cannot find
     0;
 }
@@ -200,7 +243,7 @@ Spark Form - A simple yet powerful forms validation system that promotes reuse.
 =head1 SYNOPSIS
 
  use Spark::Form;
- use CGI; #Because it makes for a quick and oversimplisticn example
+ use CGI; #Because it makes for a quick and oversimplistic example
  use Third::Party::Field;
  $form = Spark::Form->new(plugin_ns => 'MyApp::Field');
  # Add a couple of inbuilt modules
@@ -240,8 +283,7 @@ and over in MyApp/Field/Username.pm...
 
 =head1 DEPENDENCIES
 
-This module uses L<Any::Moose>. If you don't want to install L<Moose>
-(it can take a while to install all the deps), install L<Mouse> instead.
+Moose. I've dropped using Any::Moose. If you need the performance increase, perhaps it's time to start thinking about shifting off CGI.
 
 =head1 METHODS
 
@@ -265,13 +307,13 @@ If unspecified, you will need to call $form->data(\%data);
 
 =back
 
-=head2 add ($thing,$field_name,%opts)
+=head2 add ($thing,@rest)
 
 If $thing is a string, attempts to instantiate a plugin of that type and add it
-to the form.
-If it is an arrayref, it loops over the contents (Useful for custom fields).
+to the form. Requires the second argument to be a string name for the field to identify it in the form. Rest will become %kwargs
+If it is an arrayref, it loops over the contents (Useful for custom fields, will probably result in bugs for string field names).@rest will be passed in each iteration.
 If it looks sufficiently like a field (implements Spark::Form::Field),
-then it will add it to the list of fields.
+then it will add it to the list of fields. @rest will just become %kwargs
 
 Uses 'field name' to locate it from the data passed in.
 
@@ -309,6 +351,10 @@ L<http://github.com/jjl/Spark-Form/>
 James Laver. L<http://jameslaver.com/>.
 
 Thanks to the Django Project, whose forms module gave some inspiration.
+
+=head1 SEE ALSO
+
+The FAQ: L<Spark::Form::FAQ>
 
 =head1 LICENSE
 
