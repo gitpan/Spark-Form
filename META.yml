@@ -1,6 +1,6 @@
 ---
 name: Spark-Form
-version: 0.1
+version: 0.2
 author:
   - 'James Laver <sprintf qw(%s@%s.%s cpan jameslaver com)>'
 abstract: A simple yet powerful forms validation system that promotes reuse.
@@ -14,11 +14,12 @@ requires:
   Moose: 0
   MooseX::AttributeHelpers: 0
 build_requires:
+  Test::MockObject::Extends: 0
   Test::More: 0
 provides:
   Spark::Form:
     file: lib/Spark/Form.pm
-    version: 0.1
+    version: 0.2
   Spark::Form::Field:
     file: lib/Spark/Form/Field.pm
   Spark::Form::Field::Role::Printable:

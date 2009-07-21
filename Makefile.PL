@@ -10,6 +10,7 @@ WriteMakefile
                            'Test::More' => 0,
                            'Module::Pluggable' => 0,
                            'MooseX::AttributeHelpers' => 0,
+                           'Test::MockObject::Extends' => 0,
                            'List::MoreUtils' => 0,
                            'Moose' => 0,
                            'HTML::Tiny' => 0
