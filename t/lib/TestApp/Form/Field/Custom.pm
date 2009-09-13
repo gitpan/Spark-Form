@@ -1,17 +1,18 @@
 package TestApp::Form::Field::Custom;
+our $VERSION = '0.0300';
+
 
 use Moose;
 extends 'Spark::Form::Field';
-with 'Spark::Form::Field::Role::Validateable';
 
 has 'min_length' => (
-    isa => 'Int',
-    is => 'rw',
+    isa      => 'Int',
+    is       => 'rw',
     required => 0,
     default  => 6,
 );
 
-sub validate {
+sub _validate {
     my ($self) = @_;
     if ($self->min_length > length $self->value) {
         $self->error('Customs must be at least ' . $self->min_length . ' characters long.');

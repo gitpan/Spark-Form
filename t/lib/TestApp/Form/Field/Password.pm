@@ -1,18 +1,19 @@
 package TestApp::Form::Field::Password;
+our $VERSION = '0.0300';
+
 
 use Moose;
 extends 'Spark::Form::Field';
-with 'Spark::Form::Field::Role::Validateable';
 
 has confirm => (
     isa => 'Maybe[Str]',
-    is => 'ro',
+    is  => 'ro',
 );
 
-sub validate {
+sub _validate {
     my ($self) = @_;
 
-    if (length ($self->value||'') < 6) {
+    if (length($self->value || '') < 6) {
         $self->error('Password must be at least 6 characters long');
     }
     if ($self->confirm) {
@@ -30,6 +31,5 @@ sub to_html {
 sub to_xhtml {
     q{<input type="password" />};
 }
-
 
 1;

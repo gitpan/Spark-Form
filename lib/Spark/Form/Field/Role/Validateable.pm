@@ -1,98 +1,48 @@
 package Spark::Form::Field::Role::Validateable;
+our $VERSION = '0.0300';
+
+
+# ABSTRACT: Fields that can be validated
 
 use Moose::Role;
-use MooseX::AttributeHelpers;
+use Carp ();
 
-requires 'validate';
-
-has valid => (
-    isa      => 'Bool',
-    is       => 'rw',
-    required => 0,
-    default  => 0,
-);
-
-has _errors => (
-    metaclass => 'Collection::Array',
-    isa       => 'ArrayRef[Str]',
-    is        => 'ro',
-    required  => 0,
-    default   => sub{[]},
-    provides  => {
-        push     => '_add_error',
-        elements => 'errors',
-        clear    => '_clear_errors',
-    },
-);
-
-sub error {
-    my ($self,$error) = @_;
-
-    $self->valid(0);
-    $self->_add_error($error);
-}
-
-before 'validate' => sub {
-    my ($self) = @_;
-    $self->_clear_errors;
-    $self->valid(1);
-    #Set a default of the empty string, suppresses a warning
-    $self->value($self->value||'');
-};
+Carp::cluck('Spark::Form::Field::Role::Validateable is a no-op. Please remove it from your code');
 
 1;
-__END__
+
+
+
+=pod
 
 =head1 NAME
 
-Spark::Form::Field::Role::Validateable - Fields that can be validated.
+Spark::Form::Field::Role::Validateable - Fields that can be validated
+
+=head1 VERSION
+
+version 0.0300
 
 =head1 SYNOPSIS
 
- package MyApp::Field::CustomText;
- use Moose;
- extends 'Spark::Form::Field';
- with 'Spark::Form::Field::Role::Validateable';
- 
- sub validate {
-     my $self = shift;
-     
-     if ($self->value eq 'password') {
-         $self->valid(1);
-         return 1;
-     } else {
-         $self->error('password is password');
-         return 0;
-     }
- }
- 
-=head1 ACCESSORS
+To be phased out. Deprecated. Gone.
 
-=head2 valid => Bool
 
-Treat as readonly. Whether the field is valid.
 
-=head2 errors => ArrayRef
+=head1 AUTHOR
 
-Treat as readonly. The list of errors generated in validation.
+  James Laver L<http://jameslaver.com>
 
-=head1 METHODS
+=head1 COPYRIGHT AND LICENSE
 
-=head2 error (Str)
+This software is copyright (c) 2009 by James Laver C<< <sprintf qw(%s@%s.%s cpan jameslaver com)> >>.
 
-Adds an error to the current field's list.
+This is free software; you can redistribute it and/or modify it under
+the same terms as the Perl 5 programming language system itself.
 
-=head1 INTERFACE
+=cut 
 
-To be considered validateable, you must implement this role.
 
-It requires the following methods:
 
-=head2 validate
+__END__
 
-This should take C<value> and set C<valid> to 1 or call C<error>.
-It should also return C<valid>.
-
-=head1 SEE ALSO
-
-=cut
